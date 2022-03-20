@@ -1,0 +1,221 @@
+// Each #kernel tells which function to compile; you can have many kernels
+#pragma kernel AddSource
+#pragma kernel AddDynamicSource
+#pragma kernel AddRandomSource
+#pragma kernel Diffusion
+#pragma kernel Advect
+#pragma kernel ProjectDiv
+#pragma kernel ProjectP
+#pragma kernel ProjectVel
+#pragma kernel Collision
+#pragma kernel OutputRT
+#pragma kernel OutputVelDensRT
+
+// Create a RenderTexture with enableRandomWrite flag and set it
+// with cs.SetTexture
+int N;
+int brushPosX;
+int brushPosY;
+int brushSize;
+int isBorderless;
+
+float dt;
+float diff;
+float time;
+float randomSeed;
+float disturbance;
+
+RWStructuredBuffer<float> VBuffer;
+RWStructuredBuffer<float> V0Buffer;
+RWStructuredBuffer<float> UBuffer;
+RWStructuredBuffer<float> U0Buffer;
+RWStructuredBuffer<float> XBuffer;
+RWStructuredBuffer<float> X0Buffer;
+RWStructuredBuffer<float> SBuffer;
+RWStructuredBuffer<float> DSBuffer;
+RWStructuredBuffer<float> DBuffer;
+RWStructuredBuffer<float> D0Buffer;
+RWStructuredBuffer<float> DivBuffer;
+RWStructuredBuffer<float> PBuffer;
+RWStructuredBuffer<float> CBuffer;
+
+RWTexture2D<float4> dynamicSourceTexture;
+RWTexture2D<float4> inputTexture;
+RWTexture2D<float4> outputTexture;
+
+int2 Boundary(int x, int y)
+{
+    int xMinBnd = abs(x - 1) * step(x, -0.5);
+    int xMaxBnd = -abs(x - N) * step(N + 0.5, x);
+    int yMinBnd = abs(y - 1) * step(y, -0.5);
+    int yMaxBnd = -abs(y - N) * step(N + 0.5, y);
+
+    int2 id = int2(x + xMinBnd + xMaxBnd, y + yMinBnd + yMaxBnd);
+    id.x += clamp(abs(xMinBnd) + abs(xMaxBnd), 0, 1) * N * isBorderless;
+    id.y += clamp(abs(yMinBnd) + abs(yMaxBnd), 0, 1) * N * isBorderless;
+
+    return id;
+}
+int GetIndex(int x,int y)
+{
+    int2 xy = Boundary(x, y);
+    int id = xy.x + xy.y * N;
+    return clamp(id, 0, N * N);
+}
+float GetValue(RWStructuredBuffer<float> buffer, int x, int y) 
+{
+    int isOutBorder = clamp(N - x, 0, 1) * clamp(N - y, 0, 1) * clamp(x, 0, 1) * clamp(y, 0, 1) + (1 - isBorderless);
+    return buffer[GetIndex(x, y)] * clamp(isOutBorder, 0, 1);
+}
+
+float Random(float2 st) {
+    st = floor(st * randomSeed);
+    randomSeed = (frac(sin(dot(st.xy, float2(12.93298, 73.233))) * 43.5453123) - 0.5) * 2;
+    return randomSeed;
+}
+float2 RandomVector(float2 st) {
+    float x = Random(st);
+    float y = Random(st);
+    return float2(x, y);
+}
+
+[numthreads(32, 32, 1)]
+void BrushRT(uint3 id : SV_DispatchThreadID) 
+{
+    float i = id.x;
+    float j = id.y;
+    float d = sqrt(pow(brushPosX - i, 2) + pow(brushPosY - j, 2));
+    float value = step(d, brushSize);
+    inputTexture[id.xy] = float4(value, inputTexture[id.xy].y, inputTexture[id.xy].z, inputTexture[id.xy].w);
+}
+
+[numthreads(32, 32, 1)]
+void OutputRT(uint3 id : SV_DispatchThreadID)
+{
+    float i = id.x;
+    float j = id.y;
+    float d = XBuffer[GetIndex(i, j)];
+    outputTexture[float2(N - i ,j)] = float4(d, d, d, 1);
+}
+
+[numthreads(32, 32, 1)]
+void OutputVelDensRT(uint3 id : SV_DispatchThreadID)
+{
+    float i = id.x;
+    float j = id.y;
+    float d = XBuffer[GetIndex(i, j)];
+    float u = UBuffer[GetIndex(i, j)];
+    float v = VBuffer[GetIndex(i, j)];
+    outputTexture[float2(N - i, j)] = float4(u, v, d, 1);
+}
+
+[numthreads(32, 32, 1)]
+void AddSource(uint3 id : SV_DispatchThreadID)
+{
+    int i = GetIndex(id.x, id.y);
+    XBuffer[i] += SBuffer[i]* dt;
+}
+
+[numthreads(32, 32, 1)]
+void AddDynamicSource(uint3 id : SV_DispatchThreadID)
+{
+    int i = GetIndex(id.x, id.y);
+    SBuffer[i] += dynamicSourceTexture[id.xy].z * dt;
+}
+
+[numthreads(32, 32, 1)]
+void AddRandomSource(uint3 id : SV_DispatchThreadID)
+{
+    int i = GetIndex(id.x, id.y);
+    SBuffer[i] = SBuffer[i] * (disturbance *  clamp(Random(id.xy),-1,1) * abs(1 - SBuffer[i])) + SBuffer[i] * (1 + disturbance * clamp(Random(id.xy), -1, 1));
+}
+
+[numthreads(32, 32, 1)]
+void Diffusion(uint3 id : SV_DispatchThreadID)
+{
+    float a = dt * diff * N * N;
+    float i = id.x;
+    float j = id.y;
+    //X0Buffer[GetIndex(i, j)] = XBuffer[GetIndex(i , j)] + a * (XBuffer[GetIndex(i - 1, j)] + XBuffer[GetIndex(i + 1, j)] + XBuffer[GetIndex(i, j - 1)] + XBuffer[GetIndex(i, j + 1)] - 4 * XBuffer[GetIndex(i, j)]);
+    XBuffer[GetIndex(i, j)] = (X0Buffer[GetIndex(i, j)] + a * (XBuffer[GetIndex(i - 1, j)] + XBuffer[GetIndex(i + 1, j)] + XBuffer[GetIndex(i, j - 1)] + XBuffer[GetIndex(i, j + 1)])) / (1 + 4 * a);
+}
+
+[numthreads(32, 32, 1)]
+void Advect(uint3 id : SV_DispatchThreadID)
+{
+    float dt0 = dt * N;
+    float i = id.x;
+    float j = id.y;
+     
+    float x = i - dt0 * UBuffer[GetIndex(i, j)];
+    float y = j - dt0 * VBuffer[GetIndex(i, j)];
+    x = clamp( x, 0.5, N + 0.5);
+    y = clamp( y, 0.5, N + 0.5);
+
+    int i0 = int(x);
+    float i1 = i0 + 1;
+    int j0 = int(y);
+    float j1 = j0 + 1;
+    float s1 = x - i0;
+    float s0 = 1 - s1;
+    float t1 = y - j0;
+    float t0 = 1 - t1;
+
+    DBuffer[GetIndex(i, j)] = s0 * (t0 * D0Buffer[GetIndex(i0, j0)] + t1 * D0Buffer[GetIndex(i0, j1)]) + s1 * (t0 * D0Buffer[GetIndex(i1, j0)] + t1 * D0Buffer[GetIndex(i1, j1)]);
+}
+
+[numthreads(32, 32, 1)]
+void ProjectDiv(uint3 id : SV_DispatchThreadID)
+{
+    float h = 1.0 / N;
+    float i = id.x;
+    float j = id.y;
+
+    DivBuffer[GetIndex(i, j)] = -0.5 * h * (UBuffer[GetIndex(i + 1, j)] - UBuffer[GetIndex(i - 1, j)] + VBuffer[GetIndex(i, j + 1)] - VBuffer[GetIndex(i, j - 1)]);
+    PBuffer[GetIndex(i, j)] = 0;
+}
+
+[numthreads(32, 32, 1)]
+void ProjectP(uint3 id : SV_DispatchThreadID) 
+{
+    float i = id.x;
+    float j = id.y;
+    PBuffer[GetIndex(i, j)] = (DivBuffer[GetIndex(i, j)] + PBuffer[GetIndex(i - 1, j)] + PBuffer[GetIndex(i + 1, j)] + PBuffer[GetIndex(i, j - 1)] + PBuffer[GetIndex(i, j + 1)]) / 4;
+}
+
+[numthreads(32, 32, 1)]
+void ProjectVel(uint3 id : SV_DispatchThreadID) 
+{
+    float h = 1.0 / N;
+    float i = id.x;
+    float j = id.y;
+
+    UBuffer[GetIndex(i, j)] -= 0.5 * (PBuffer[GetIndex(i + 1, j)] - PBuffer[GetIndex(i - 1, j)]) / h;
+    VBuffer[GetIndex(i, j)] -= 0.5 * (PBuffer[GetIndex(i, j + 1)] - PBuffer[GetIndex(i, j - 1)]) / h;
+}
+
+[numthreads(32, 32, 1)]
+void Collision(uint3 id : SV_DispatchThreadID)
+{
+    float i = id.x;
+    float j = N - id.y;
+    float bd = inputTexture[float2(i, j)].z;
+    float bx = step(0, UBuffer[GetIndex(i, j)]) * inputTexture[float2(i + 1, j)].z + step(UBuffer[GetIndex(i, j)], 0) * inputTexture[float2(i - 1, j)].z;
+    float by = step(0, UBuffer[GetIndex(i, j)]) * inputTexture[float2(i, j + 1)].z + step(UBuffer[GetIndex(i, j)], 0) * inputTexture[float2(i, j + 1)].z;
+
+    UBuffer[GetIndex(i, j)] -= bx * UBuffer[GetIndex(i, j)] * 1.9;
+    VBuffer[GetIndex(i, j)] -= by * VBuffer[GetIndex(i, j)] * 1.9;
+    float isBeImpact = inputTexture[float2(i, j)].z - CBuffer[GetIndex(i, j)];
+    float addVelX = (CBuffer[GetIndex(i - 1, j)] - CBuffer[GetIndex(i + 1, j)]) * isBeImpact * 1;
+    float addVelY = (CBuffer[GetIndex(i, j - 1)] - CBuffer[GetIndex(i, j + 1)]) * isBeImpact * 1;
+    UBuffer[GetIndex(i, j)] += addVelX;
+    VBuffer[GetIndex(i, j)] += addVelY;
+    CBuffer[GetIndex(i, j)] = inputTexture[float2(i, j)].z;
+    
+    XBuffer[GetIndex(i + 1, j)] += bd * XBuffer[GetIndex(i, j)] / 4;
+    XBuffer[GetIndex(i - 1, j)] += bd * XBuffer[GetIndex(i, j)] / 4;
+    XBuffer[GetIndex(i, j + 1)] += bd * XBuffer[GetIndex(i, j)] / 4;
+    XBuffer[GetIndex(i, j - 1)] += bd * XBuffer[GetIndex(i, j)] / 4;
+    XBuffer[GetIndex(i, j)] -= bd * XBuffer[GetIndex(i, j)];
+}
+
