@@ -26,6 +26,7 @@ public class FluidSimulation : MonoBehaviour
     public bool isUseMouseClick = true;
     public bool isBorderless = true;
     public bool isCollision = true;
+    public bool isLaunchfromObject = false;
     public int brushSize = 10;
 
     [Header("Ω‚À„∑÷±Ê¬ ")]
@@ -55,11 +56,11 @@ public class FluidSimulation : MonoBehaviour
     {
         SetValue(size, diff, dt);
         sourceDensity = FluidSimulationFuncLibrary.GetGrayscale(densitySource, size, "R", "G", mulDens);
-        sourceVelocityX = FluidSimulationFuncLibrary.GetGrayscale(velocitySource, size, "R", mulVel);
-        sourceVelocityY = FluidSimulationFuncLibrary.GetGrayscale(velocitySource, size, "G", mulVel);
+        sourceVelocityX = FluidSimulationFuncLibrary.GetGrayscale(velocitySource, size, "R",0.5f, mulVel);
+        sourceVelocityY = FluidSimulationFuncLibrary.GetGrayscale(velocitySource, size, "G", 0.5f, mulVel);
         continuousSourceDensity = FluidSimulationFuncLibrary.GetGrayscale(continuousDensitySource, size, "R", "G", mulDens);
-        continuousSourceVelocityX = FluidSimulationFuncLibrary.GetGrayscale(continuousVelocitySource, size, "R", mulVel);
-        continuousSourceVelocityY = FluidSimulationFuncLibrary.GetGrayscale(continuousVelocitySource, size, "G", mulVel);
+        continuousSourceVelocityX = FluidSimulationFuncLibrary.GetGrayscale(continuousVelocitySource, size, "R", 0.5f, mulVel);
+        continuousSourceVelocityY = FluidSimulationFuncLibrary.GetGrayscale(continuousVelocitySource, size, "G", 0.5f, mulVel);
 
         computeBufferMap.Add("U0", FluidSimulationFuncLibrary.GetComputeBuffer(sourceVelocityX));
         computeBufferMap.Add("V0", FluidSimulationFuncLibrary.GetComputeBuffer(sourceVelocityY));
@@ -83,8 +84,8 @@ public class FluidSimulation : MonoBehaviour
         {
             Collision();
         }
-        //OutputRT("X");
-        OutputVelDensRT();
+        OutputRT("X");
+        //OutputVelDensRT();
     }
     private void DensStep()
     {
@@ -92,12 +93,16 @@ public class FluidSimulation : MonoBehaviour
         {
             computeBufferMap["X0"].SetData(continuousSourceDensity);
             //FluidSimulationFuncLibrary.AddDynamicSource(shader, ref dynamicSourceRT, ref computeBufferMap);
-            FluidSimulationFuncLibrary.CalculateShader(shader, "AddRandomSource",
+            FluidSimulationFuncLibrary.CalculateShader(shader, "AddRandomDensSource",
             new string[] {
                 "X0_SBuffer",
             },
             ref computeBufferMap
             );
+        }
+        if (isLaunchfromObject)
+        {
+            FluidSimulationFuncLibrary.AddDynamicSource(shader, ref inputRT, ref computeBufferMap);
         }
 
         FluidSimulationFuncLibrary.CalculateShader(shader, "AddSource",
@@ -132,6 +137,13 @@ public class FluidSimulation : MonoBehaviour
         },
         ref computeBufferMap
         );
+
+        FluidSimulationFuncLibrary.CalculateShader(shader, "MoveBuffer",
+        new string[] {
+            "X_XBuffer"
+        },
+        ref computeBufferMap
+        );
     }
     private void VelStep()
     {
@@ -140,13 +152,13 @@ public class FluidSimulation : MonoBehaviour
             computeBufferMap["U0"].SetData(continuousSourceVelocityX);
             computeBufferMap["V0"].SetData(continuousSourceVelocityY);
 
-            FluidSimulationFuncLibrary.CalculateShader(shader, "AddRandomSource",
+            FluidSimulationFuncLibrary.CalculateShader(shader, "AddRandomVelSource",
             new string[] {
                 "U0_SBuffer",
             },
             ref computeBufferMap
             );
-            FluidSimulationFuncLibrary.CalculateShader(shader, "AddRandomSource",
+            FluidSimulationFuncLibrary.CalculateShader(shader, "AddRandomVelSource",
             new string[] {
                 "V0_SBuffer",
             },
@@ -221,6 +233,20 @@ public class FluidSimulation : MonoBehaviour
         );
 
         Project();
+
+
+        FluidSimulationFuncLibrary.CalculateShader(shader, "MoveBuffer",
+        new string[] {
+            "U_XBuffer"
+        },
+        ref computeBufferMap
+        );
+        FluidSimulationFuncLibrary.CalculateShader(shader, "MoveBuffer",
+        new string[] {
+            "V_XBuffer"
+        },
+        ref computeBufferMap
+        );
     }
     private void OutputRT(string bufferMapKey)
     {

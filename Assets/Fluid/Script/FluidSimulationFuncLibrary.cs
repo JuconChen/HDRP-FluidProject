@@ -8,7 +8,7 @@ public class FluidSimulationFuncLibrary
     public static float diff = 0;
     public static float dt = 0;
     public static float disturbance = 0;
-    public static float[] GetGrayscale(Texture2D texture,int size,string channel,float mul)
+    public static float[] GetGrayscale(Texture2D texture,int size,string channel,float correction ,float mul)
     {
         float[] grayscale = new float[size * size];
         int subSize = texture.width / size;
@@ -40,6 +40,7 @@ public class FluidSimulationFuncLibrary
                                 gray += color.grayscale;
                                 break;
                         }
+                        gray -= correction;
                     }
                 }
                 grayscale[i + j * size] = mul * gray / (subSize * subSize);

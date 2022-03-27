@@ -1,7 +1,9 @@
 // Each #kernel tells which function to compile; you can have many kernels
 #pragma kernel AddSource
 #pragma kernel AddDynamicSource
-#pragma kernel AddRandomSource
+#pragma kernel AddRandomDensSource
+#pragma kernel AddRandomVelSource
+#pragma kernel MoveBuffer
 #pragma kernel Diffusion
 #pragma kernel Advect
 #pragma kernel ProjectDiv
@@ -113,7 +115,8 @@ void OutputVelDensRT(uint3 id : SV_DispatchThreadID)
 void AddSource(uint3 id : SV_DispatchThreadID)
 {
     int i = GetIndex(id.x, id.y);
-    XBuffer[i] += SBuffer[i]* dt;
+    XBuffer[i] +=  SBuffer[i]* dt;
+    //XBuffer[i] = clamp(XBuffer[i], 0, 1);
 }
 
 [numthreads(32, 32, 1)]
@@ -124,10 +127,26 @@ void AddDynamicSource(uint3 id : SV_DispatchThreadID)
 }
 
 [numthreads(32, 32, 1)]
-void AddRandomSource(uint3 id : SV_DispatchThreadID)
+void AddRandomDensSource(uint3 id : SV_DispatchThreadID)
 {
     int i = GetIndex(id.x, id.y);
     SBuffer[i] = SBuffer[i] * (disturbance *  clamp(Random(id.xy),-1,1) * abs(1 - SBuffer[i])) + SBuffer[i] * (1 + disturbance * clamp(Random(id.xy), -1, 1));
+}
+
+[numthreads(32, 32, 1)]
+void AddRandomVelSource(uint3 id : SV_DispatchThreadID)
+{
+    int i = GetIndex(id.x, id.y);
+    //SBuffer[i] = SBuffer[i] * (disturbance *  clamp(Random(id.xy),-1,1) * abs(1 - SBuffer[i])) + SBuffer[i] * (1 + disturbance * clamp(Random(id.xy), -1, 1));
+    SBuffer[i] *= clamp(Random(id.xy), -1, 1);
+}
+
+[numthreads(32, 32, 1)]
+void MoveBuffer(uint3 id : SV_DispatchThreadID)
+{
+    int i = GetIndex(id.x, id.y);
+    int j = GetIndex(id.x + 1, id.y);
+    XBuffer[i] = XBuffer[j];
 }
 
 [numthreads(32, 32, 1)]

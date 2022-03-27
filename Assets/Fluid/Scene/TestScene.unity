@@ -247,7 +247,7 @@ Transform:
   m_GameObject: {fileID: 56238863}
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
   m_LocalPosition: {x: 0, y: -0.87, z: 0}
-  m_LocalScale: {x: 10, y: 0.2, z: 10}
+  m_LocalScale: {x: 10, y: 0.5, z: 10}
   m_Children: []
   m_Father: {fileID: 99082140}
   m_RootOrder: 2
@@ -362,10 +362,10 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   shader: {fileID: 7200000, guid: 9a28a4cc7dc668e419390c6c78a1cec6, type: 3}
-  densitySource: {fileID: 2800000, guid: 6886c7e14de700a439e59b7c38a86d93, type: 3}
+  densitySource: {fileID: 2800000, guid: c76dc929a90c08645bd854f5fec73b67, type: 3}
   velocitySource: {fileID: 2800000, guid: c76dc929a90c08645bd854f5fec73b67, type: 3}
   continuousDensitySource: {fileID: 2800000, guid: 6a6fd3475a44b44469741ab1f6ca169a, type: 3}
-  continuousVelocitySource: {fileID: 2800000, guid: 6a6fd3475a44b44469741ab1f6ca169a, type: 3}
+  continuousVelocitySource: {fileID: 2800000, guid: 9397f89396871434bba74a8fda2ea7dc, type: 3}
   dynamicSourceRT: {fileID: 0}
   inputRT: {fileID: 8400000, guid: 85001e4abf718a547a8b767488a28bab, type: 2}
   outputRT: {fileID: 8400000, guid: 29a94d737fdd84e4ebf8bb8263073496, type: 2}
@@ -374,10 +374,11 @@ MonoBehaviour:
   isUseMouseClick: 0
   isBorderless: 1
   isCollision: 1
+  isLaunchfromObject: 0
   brushSize: 10
   size: 1024
-  projectIterations: 10
-  diffuseIterations: 5
+  projectIterations: 20
+  diffuseIterations: 20
   disturbance: 1
   mulVel: 2
   mulDens: 0.1
@@ -472,7 +473,7 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 220773769}
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 1.18, y: -0.28, z: -1.13}
+  m_LocalPosition: {x: 0, y: -0.28, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_Children: []
   m_Father: {fileID: 0}
